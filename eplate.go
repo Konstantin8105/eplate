@@ -2,18 +2,17 @@ package main
 
 import (
 	"fmt"
-	"os"
 
-	o "github.com/Konstantin8105/ortho"
+	"github.com/Konstantin8105/ortho"
 )
 
 func main() {
 	var m ortho.Model
-	fmt.Fprintf(os.Stdout, "Horizontal and Vertical\n")
-	m.Init(1800, 1200, "base")
+	m.Init(1800, 1800, "base")
 	m.Add(100, "horizontal", 600, true)
-	m.Add(100, "vertical", 1000, false)
-	view(m.Generate(0))
-	debug(m.Generate(100))
-	fmt.Fprintf(os.Stdout, "\n")
+	m.Add(100, "horizontal", 1200, true)
+	p, r := m.Generate(250)
+	fmt.Println(p)
+	fmt.Println(r)
+	fmt.Println(">>", len(p), len(r))
 }
