@@ -132,19 +132,21 @@ func main() {
 
 	// Load on left/right edge
 	for _, s := range []struct {
-		pts       []ortho.PointTypes
-		direction int
-		factor    float64
+		pts          []ortho.PointType
+		byX, sortByX bool
+		factor       float64
 	}{
 		{
-			pts:       {ortho.Left, ortho.LeftBottom, ortho.LeftTop},
-			direction: 1,
-			factor:    Sx,
+			pts:     []ortho.PointType{ortho.Left, ortho.LeftBottom, ortho.LeftTop},
+			byX:     true,
+			sortByX: false,
+			factor:  Sx,
 		},
 		{
-			pts:       {ortho.Right, ortho.RightBottom, ortho.RightTop},
-			direction: 1,
-			factor:    -Sx,
+			pts:     []ortho.PointType{ortho.Right, ortho.RightBottom, ortho.RightTop},
+			byX:     true,
+			sortByX: false,
+			factor:  -Sx,
 		},
 	} {
 		if math.Abs(s.factor) == 0.0 {
@@ -160,26 +162,36 @@ func main() {
 			}
 		}
 		// sorting
-		sort.Slice(ind, func(i, j int) bool {
-			switch s.direction {
-			case 1:
-				return ps[i][1] < ps[j][1]
-			case 2:
+		sort.SliceStable(ind, func(i, j int) bool {
+			if s.sortByX {
 				return ps[i][0] < ps[j][0]
 			}
-			panic("undefined")
+			return ps[ind[i]][1] < ps[ind[j]][1]
 		})
 		// load distribution
 		for i := range ind {
 			var L float64
 			if i != 0 {
-				L += (ps[ind[i]] - ps[ind[i-1]]) / 2.0
+				if s.byX {
+					L += float64(ps[ind[i]][1]-ps[ind[i-1]][1]) / 2.0
+				} else {
+					L += float64(ps[ind[i]][0]-ps[ind[i-1]][0]) / 2.0
+				}
+
 			}
 			if i != len(ind)-1 {
-				L += (ps[ind[i+1]] - ps[ind[i]]) / 2.0
+				if s.byX {
+					L += float64(ps[ind[i+1]][1]-ps[ind[i]][1]) / 2.0
+				} else {
+					L += float64(ps[ind[i+1]][0]-ps[ind[i]][0]) / 2.0
+				}
 			}
-			force := L * thks[0].value * s.factor
-			out += fmt.Sprintf("%5d,%5d,%+.6e\n", ind[i]+1, s.direction, force)
+			force := L * float64(thks[0].value) * s.factor
+			if s.byX {
+				out += fmt.Sprintf("%5d,%5d, %+9.5e\n", ind[i]+1, 1, force)
+			} else {
+				out += fmt.Sprintf("%5d,%5d, %+9.5e\n", ind[i]+1, 2, force)
+			}
 		}
 	}
 
