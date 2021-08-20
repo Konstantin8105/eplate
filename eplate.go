@@ -2,8 +2,14 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/Konstantin8105/ortho"
 )
@@ -196,22 +202,62 @@ func main() {
 		}
 	}
 
+	// print stresses
 	for _, t := range thks {
-		out += fmt.Sprintf("*EL PRINT,ELSET=%s\nS\n", t.name)
+		out += fmt.Sprintf("*EL FILE  , ELSET=%s\nS\n", t.name)
+		out += fmt.Sprintf("*EL PRINT , ELSET=%s\nS\n", t.name)
 	}
-	out += fmt.Sprintf("*NODE FILE\nU\n")
-	out += fmt.Sprintf("*EL FILE, OUTPUT=3D\nS\n")
+	// print displacement
+	out += fmt.Sprintf("*NODE FILE  , NSET=NALL\nU\n")
+	out += fmt.Sprintf("*NODE PRINT , NSET=NALL\nU\n")
 	out += fmt.Sprintf("*END STEP\n")
 
-	fmt.Println(out)
+	output, err := ccx(out)
+	if err != nil {
+		fmt.Println(err)
+	}
 
-	// run:
-	// go run eplate.go > 1.inp
-	// ccx -i 1
-	// /home/konstantin/TEST/plate/cgx_2.17.1 1.frd
-	//
-	// less 1.dat
-	//
+	// fmt.Println(output)
+
+	parse(output)
+}
+
+func ccx(content string) (output string, err error) {
+	dir, err := ioutil.TempDir("", "ccx")
+	if err != nil {
+		return
+	}
+
+	defer os.RemoveAll(dir) // clean up
+
+	tmpfn := filepath.Join(dir, "1")
+	if err = ioutil.WriteFile(tmpfn+".inp", []byte(content), 0666); err != nil {
+		return
+	}
+
+	_, err = exec.Command("ccx", "-i", tmpfn).Output()
+	if err != nil {
+		return
+	}
+
+	tmpdat := filepath.Join(dir, "1.dat")
+	dat, err := ioutil.ReadFile(tmpdat)
+	if err != nil {
+		return
+	}
+
+	return string(dat), nil
+}
+
+// type Buckle struct {
+// 	Factor        float64
+// 	Displacements []Node
+// }
+
+func parse(content string) {
+	content = strings.ReplaceAll(content, "\r", "")
+	lines := strings.Split(content, "\n")
+
 	//      B U C K L I N G   F A C T O R   O U T P U T
 	//
 	//  MODE NO       BUCKLING
@@ -219,4 +265,27 @@ func main() {
 	//
 	//       1   0.2680174E+03
 	//       2   0.3149906E+03
+	//
+	var buckle []float64
+	for i := range lines {
+		if !strings.Contains(lines[i], "B U C K L I N G   F A C T O R   O U T P U T") {
+			continue
+		}
+		i += 5
+		for ; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) == "" {
+				break
+			}
+			fields := strings.Fields(lines[i])
+			if len(fields) != 2 {
+				panic(lines[i])
+			}
+			factor, err := strconv.ParseFloat(fields[1], 64)
+			if err != nil {
+				panic(fields[1])
+			}
+			buckle = append(buckle, factor)
+		}
+	}
+	fmt.Println(buckle)
 }
