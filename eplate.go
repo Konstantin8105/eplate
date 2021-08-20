@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"sort"
 
 	"github.com/Konstantin8105/ortho"
 )
@@ -38,6 +40,7 @@ import (
 // *END STEP
 
 func main() {
+	Sx := 1.0 // N/mm2
 	var m ortho.Model
 	m.Init(1800, 1800, "base")
 	m.Add(100, "stiff", 600, true)
@@ -55,7 +58,7 @@ func main() {
 
 	var out string
 
-	out += fmt.Sprintf("*NODE, nset=nall\n")
+	out += fmt.Sprintf("*NODE, NSET=NALL\n")
 	for i := range ps {
 		x, y, z := ps[i][0], ps[i][1], ps[i][2]
 		// TODO imperfection:
@@ -65,9 +68,9 @@ func main() {
 		out += fmt.Sprintf("%5d,%5d,%5d,%5d\n", i+1, x, y, z)
 	}
 
-	// S4 or S4R
+	// TODO : S4 or S4R
 	for _, t := range thks {
-		out += fmt.Sprintf("*ELEMENT, type=S4, elset=%s\n", t.name)
+		out += fmt.Sprintf("*ELEMENT, TYPE=S4, ELSET=%s\n", t.name)
 		for i := range rs {
 			if t.name != rs[i].Material {
 				continue
@@ -113,67 +116,78 @@ func main() {
 		}
 	}
 
-	out += fmt.Sprintf("*MATERIAL, name=Steel\n")
+	out += fmt.Sprintf("*MATERIAL, NAME=STEEL\n")
 	out += fmt.Sprintf("*ELASTIC\n")
 	out += fmt.Sprintf("205000,0.3\n")
 
 	for _, t := range thks {
-		out += fmt.Sprintf("*SHELL SECTION,ELSET=%s, material=steel\n", t.name)
+		out += fmt.Sprintf("*SHELL SECTION,ELSET=%s, MATERIAL=STEEL\n", t.name)
 		out += fmt.Sprintf("%5d\n", t.value)
 	}
 
 	out += fmt.Sprintf("*STEP\n")
-
-	out += fmt.Sprintf("*BUCKLE\n")
-
-	out += fmt.Sprintf("2\n")
+	out += fmt.Sprintf("*BUCKLE\n2\n") // 2 buckling modes
 
 	out += fmt.Sprintf("*CLOAD\n")
-	leftamount := 0
-	for i := range ts {
-		if ts[i] == ortho.Left {
-			leftamount++
+
+	// Load on left/right edge
+	for _, s := range []struct {
+		pts       []ortho.PointTypes
+		direction int
+		factor    float64
+	}{
+		{
+			pts:       {ortho.Left, ortho.LeftBottom, ortho.LeftTop},
+			direction: 1,
+			factor:    Sx,
+		},
+		{
+			pts:       {ortho.Right, ortho.RightBottom, ortho.RightTop},
+			direction: 1,
+			factor:    -Sx,
+		},
+	} {
+		if math.Abs(s.factor) == 0.0 {
+			continue
+		}
+		// store indexes
+		ind := []int{}
+		for i := range ts {
+			for _, pt := range s.pts {
+				if pt == ts[i] {
+					ind = append(ind, i)
+				}
+			}
+		}
+		// sorting
+		sort.Slice(ind, func(i, j int) bool {
+			switch s.direction {
+			case 1:
+				return ps[i][1] < ps[j][1]
+			case 2:
+				return ps[i][0] < ps[j][0]
+			}
+			panic("undefined")
+		})
+		// load distribution
+		for i := range ind {
+			var L float64
+			if i != 0 {
+				L += (ps[ind[i]] - ps[ind[i-1]]) / 2.0
+			}
+			if i != len(ind)-1 {
+				L += (ps[ind[i+1]] - ps[ind[i]]) / 2.0
+			}
+			force := L * thks[0].value * s.factor
+			out += fmt.Sprintf("%5d,%5d,%+.6e\n", ind[i]+1, s.direction, force)
 		}
 	}
-	leftamount += 2
-	sigma := 1.0 // N/mm2
-	force := 1800.0 * 12.0 * sigma / float64(leftamount-1)
 
-	// TODO
-	for i := range ts {
-		if ts[i] == ortho.Left {
-			out += fmt.Sprintf("%5d,1,%+.6e\n", i+1, force)
-		}
-		if ts[i] == ortho.LeftBottom {
-			out += fmt.Sprintf("%5d,1,%++.6e\n", i+1, force/2)
-		}
-		if ts[i] == ortho.LeftTop {
-			out += fmt.Sprintf("%5d,1,%+.6e\n", i+1, force/2)
-		}
-		if ts[i] == ortho.Right {
-			out += fmt.Sprintf("%5d,1,%+.6e\n", i+1, -force)
-		}
-		if ts[i] == ortho.RightTop {
-			out += fmt.Sprintf("%5d,1,%+.6e\n", i+1, -force/2)
-		}
-		if ts[i] == ortho.RightBottom {
-			out += fmt.Sprintf("%5d,1,%+.6e\n", i+1, -force/2)
-		}
+	for _, t := range thks {
+		out += fmt.Sprintf("*EL PRINT,ELSET=%s\nS\n", t.name)
 	}
-	// out += fmt.Sprintf("6,3,-10000\n")
-
-	// 	out += fmt.Sprintf("*EL PRINT,elset=eall\n")
-	//
-	// 	out += fmt.Sprintf("s\n")
-
-	out += fmt.Sprintf("*NODE FILE\n")
-
-	out += fmt.Sprintf("u\n")
-
-	out += fmt.Sprintf("*EL FILE, output=3D\n")
-
-	out += fmt.Sprintf("s\n")
-
+	out += fmt.Sprintf("*NODE FILE\nU\n")
+	out += fmt.Sprintf("*EL FILE, OUTPUT=3D\nS\n")
 	out += fmt.Sprintf("*END STEP\n")
 
 	fmt.Println(out)
