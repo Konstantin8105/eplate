@@ -48,18 +48,22 @@ import (
 func main() {
 	Sx := 1.0 // N/mm2
 	var m ortho.Model
-	m.Init(1800, 1800, "base")
-	m.Add(100, "stiff", 600, true)
-	m.Add(100, "stiff", 1200, true)
-	ps, rs := m.Generate(150)
+	m.Init(1800, 1800, "BASE")
+	m.Add(100, "STIFF1", 600, true)
+	m.Add(100, "STIFF2", 1200, true)
+	ps, rs := m.Generate(100)
 	ts := ortho.Select(ps)
 
 	thks := []struct {
 		name  string
 		value uint64
 	}{
-		{"base", 12},
-		{"stiff", 10},
+		// upper case
+		// uniq names
+		// no space
+		{"BASE", 12},
+		{"STIFF1", 10},
+		{"STIFF2", 10},
 	}
 
 	var out string
@@ -217,7 +221,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	// fmt.Println(output)
+	//fmt.Println(output)
 
 	parse(output)
 }
@@ -287,5 +291,79 @@ func parse(content string) {
 			buckle = append(buckle, factor)
 		}
 	}
-	fmt.Println(buckle)
+	sort.Float64s(buckle) // sorting
+	fmt.Println("Buckling factors: ", buckle[0])
+
+	//  stresses (elem, integ.pnt.,sxx,syy,szz,sxy,sxz,syz) for set BASE and time  0.0000000E+00
+	//
+	//         33   1 -9.995126E-01 -1.893993E-03 -1.058313E-03 -5.286196E-02  3.408146E-04 -3.354961E-03
+	//         33   2 -9.956041E-01 -1.324090E-04  3.801916E-04 -5.255651E-02 -5.595679E-03 -6.205827E-03
+	type stress struct {
+		name  string
+		elem  int64
+		pnt   int64
+		value [6]float64
+	}
+	var stresses []stress
+	var first string // name of first plates
+	for i := range lines {
+		prefix := "stresses (elem, integ.pnt.,sxx,syy,szz,sxy,sxz,syz) for set "
+		if !strings.Contains(lines[i], prefix) {
+			continue
+		}
+		name := strings.TrimSpace(lines[i][len(prefix):])
+		index := strings.Index(name, " ")
+		name = name[:index]
+		if first == name {
+			// search stresses only for first dataset
+			break
+		}
+		if first == "" {
+			first = name
+		}
+		i += 2
+		for ; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) == "" {
+				break
+			}
+			fields := strings.Fields(lines[i])
+			if len(fields) != 8 {
+				panic(lines[i])
+			}
+			elem, err := strconv.ParseInt(fields[0], 10, 64)
+			if err != nil {
+				panic(fields[0])
+			}
+			pnt, err := strconv.ParseInt(fields[1], 10, 64)
+			if err != nil {
+				panic(fields[1])
+			}
+			var value [6]float64
+			for i := 2; i < 8; i++ {
+				factor, err := strconv.ParseFloat(fields[i], 64)
+				if err != nil {
+					panic(fields[i])
+				}
+				value[i-2] = factor
+			}
+			stresses = append(stresses, stress{name: name, elem: elem, pnt: pnt, value: value})
+		}
+	}
+	// fmt.Println(stresses)
+	// calculate maximal stresses
+	var Smax float64
+	for i := range stresses {
+		var s float64
+		for _, v := range stresses[i].value {
+			s += v * v
+		}
+		s = math.Sqrt(s)
+		Smax = math.Max(Smax, s)
+	}
+	fmt.Println("Smax = ", Smax, "MPA")
+
+	//  displacements (vx,vy,vz) for set NALL and time  0.0000000E+00
+	//
+	//          1 -2.883217E-04  8.952994E-04  0.000000E+00
+	//          2 -5.853373E-03  8.084879E-04  1.284318E-05
 }
