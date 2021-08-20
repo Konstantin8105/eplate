@@ -51,6 +51,8 @@ func main() {
 	m.Init(1800, 1800, "BASE")
 	m.Add(100, "STIFF1", 600, true)
 	m.Add(100, "STIFF2", 1200, true)
+	// m.Add(100, "STIFF3", 600, false)
+	// m.Add(100, "STIFF4", 1200, false)
 	ps, rs := m.Generate(100)
 	ts := ortho.Select(ps)
 
@@ -64,6 +66,8 @@ func main() {
 		{"BASE", 12},
 		{"STIFF1", 10},
 		{"STIFF2", 10},
+		// {"STIFF3", 10},
+		// {"STIFF4", 10},
 	}
 
 	var out string
@@ -253,11 +257,6 @@ func ccx(content string) (output string, err error) {
 	return string(dat), nil
 }
 
-// type Buckle struct {
-// 	Factor        float64
-// 	Displacements []Node
-// }
-
 func parse(content string) {
 	content = strings.ReplaceAll(content, "\r", "")
 	lines := strings.Split(content, "\n")
@@ -349,7 +348,6 @@ func parse(content string) {
 			stresses = append(stresses, stress{name: name, elem: elem, pnt: pnt, value: value})
 		}
 	}
-	// fmt.Println(stresses)
 	// calculate maximal stresses
 	var Smax float64
 	for i := range stresses {
@@ -366,4 +364,54 @@ func parse(content string) {
 	//
 	//          1 -2.883217E-04  8.952994E-04  0.000000E+00
 	//          2 -5.853373E-03  8.084879E-04  1.284318E-05
+	type disp struct {
+		node  int64
+		value [3]float64
+	}
+	var disps []disp
+	counter := 0
+	for i := range lines {
+		prefix := "displacements (vx,vy,vz) for set"
+		if !strings.Contains(lines[i], prefix) {
+			continue
+		}
+		if 0 < counter {
+			// parse only first displacement
+			break
+		}
+		i += 2
+		for ; i < len(lines); i++ {
+			if strings.TrimSpace(lines[i]) == "" {
+				break
+			}
+			fields := strings.Fields(lines[i])
+			if len(fields) != 4 {
+				panic(lines[i])
+			}
+			node, err := strconv.ParseInt(fields[0], 10, 64)
+			if err != nil {
+				panic(fields[0])
+			}
+			var value [3]float64
+			for i := 1; i < 4; i++ {
+				factor, err := strconv.ParseFloat(fields[i], 64)
+				if err != nil {
+					panic(fields[i])
+				}
+				value[i-1] = factor
+			}
+			disps = append(disps, disp{node: node, value: value})
+		}
+	}
+	// calculate maximal displacement
+	var Dmax float64
+	for i := range disps {
+		var s float64
+		for _, v := range disps[i].value {
+			s += v * v
+		}
+		s = math.Sqrt(s)
+		Dmax = math.Max(Dmax, s)
+	}
+	fmt.Println("Dmax = ", Dmax, "mm")
 }
