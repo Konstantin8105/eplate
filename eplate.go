@@ -163,10 +163,12 @@ func main() {
 		}
 		// sorting
 		sort.SliceStable(ind, func(i, j int) bool {
+			i = ind[i]
+			j = ind[j]
 			if s.sortByX {
 				return ps[i][0] < ps[j][0]
 			}
-			return ps[ind[i]][1] < ps[ind[j]][1]
+			return ps[i][1] < ps[j][1]
 		})
 		// load distribution
 		for i := range ind {
@@ -177,7 +179,6 @@ func main() {
 				} else {
 					L += float64(ps[ind[i]][0]-ps[ind[i-1]][0]) / 2.0
 				}
-
 			}
 			if i != len(ind)-1 {
 				if s.byX {
