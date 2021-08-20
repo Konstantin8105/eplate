@@ -49,10 +49,10 @@ func main() {
 	Sx := 1.0 // N/mm2
 	var m ortho.Model
 	m.Init(1800, 1800, "BASE")
-	m.Add(100, "STIFF1", 600, true)
-	m.Add(100, "STIFF2", 1200, true)
-	// m.Add(100, "STIFF3", 600, false)
-	// m.Add(100, "STIFF4", 1200, false)
+ 	m.Add(100, "STIFF1", 600, true)
+ 	m.Add(100, "STIFF2", 1200, true)
+ // m.Add(100, "STIFF3", 600, false)
+ // m.Add(100, "STIFF4", 1200, false)
 	ps, rs := m.Generate(100)
 	ts := ortho.Select(ps)
 
@@ -66,8 +66,8 @@ func main() {
 		{"BASE", 12},
 		{"STIFF1", 10},
 		{"STIFF2", 10},
-		// {"STIFF3", 10},
-		// {"STIFF4", 10},
+	// {"STIFF3", 10},
+	// {"STIFF4", 10},
 	}
 
 	var out string
