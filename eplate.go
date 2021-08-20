@@ -42,7 +42,7 @@ func main() {
 	m.Init(1800, 1800, "base")
 	m.Add(100, "stiff", 600, true)
 	m.Add(100, "stiff", 1200, true)
-	ps, rs := m.Generate(50)
+	ps, rs := m.Generate(150)
 	ts := ortho.Select(ps)
 
 	thks := []struct {
@@ -57,7 +57,12 @@ func main() {
 
 	out += fmt.Sprintf("*NODE, nset=nall\n")
 	for i := range ps {
-		out += fmt.Sprintf("%5d,%5d,%5d,%5d\n", i+1, ps[i][0], ps[i][1], ps[i][2])
+		x, y, z := ps[i][0], ps[i][1], ps[i][2]
+		// TODO imperfection:
+		// if z == 100 {
+		// 	y += uint64(float64(x)/1800.0*20)
+		// }
+		out += fmt.Sprintf("%5d,%5d,%5d,%5d\n", i+1, x, y, z)
 	}
 
 	// S4 or S4R
