@@ -157,19 +157,34 @@ func main() {
 	}
 	// out += fmt.Sprintf("6,3,-10000\n")
 
-// 	out += fmt.Sprintf("*EL PRINT,elset=eall\n")
-// 
-// 	out += fmt.Sprintf("s\n")
+	// 	out += fmt.Sprintf("*EL PRINT,elset=eall\n")
+	//
+	// 	out += fmt.Sprintf("s\n")
 
 	out += fmt.Sprintf("*NODE FILE\n")
 
 	out += fmt.Sprintf("u\n")
 
- 	out += fmt.Sprintf("*EL FILE, output=3D\n")
- 
- 	out += fmt.Sprintf("s\n")
+	out += fmt.Sprintf("*EL FILE, output=3D\n")
+
+	out += fmt.Sprintf("s\n")
 
 	out += fmt.Sprintf("*END STEP\n")
 
 	fmt.Println(out)
+
+	// run:
+	// go run eplate.go > 1.inp
+	// ccx -i 1
+	// /home/konstantin/TEST/plate/cgx_2.17.1 1.frd
+	//
+	// less 1.dat
+	//
+	//      B U C K L I N G   F A C T O R   O U T P U T
+	//
+	//  MODE NO       BUCKLING
+	//                 FACTOR
+	//
+	//       1   0.2680174E+03
+	//       2   0.3149906E+03
 }
