@@ -63,9 +63,10 @@ func Example() {
 	// | Horizontal:        true     |
 	//
 	// Loads:
-	// | Sx:  1.000 MPa |
-	// | Sy:  0.000 MPa |
-	// | Tau: 0.000 MPa |
+	// | Sx:                  1.000 MPa |
+	// | Sy:                  0.000 MPa |
+	// | Tau:                 0.000 MPa |
+	// | Lateral pressure:    0.000 MPa |
 	//
 	// | Buckling factor       269.93 times |
 	// | Maximal stress          1.05 MPa   |

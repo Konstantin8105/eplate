@@ -60,15 +60,17 @@ func (s Stiffiner) String() string {
 
 type Load struct {
 	Sx, Sy, Tau float64 // MPa
+	Pressure    float64 // Lateral pressure, MPa
 }
 
 func (l Load) String() string {
 	var buf bytes.Buffer
 	w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', tabwriter.TabIndent)
 	fmt.Fprintf(w, "Loads:\n")
-	fmt.Fprintf(w, "|\tSx:\t%5.3f\tMPa\t|\n", l.Sx)
-	fmt.Fprintf(w, "|\tSy:\t%5.3f\tMPa\t|\n", l.Sy)
-	fmt.Fprintf(w, "|\tTau:\t%5.3f\tMPa\t|\n", l.Tau)
+	fmt.Fprintf(w, "|\tSx:\t%8.3f\tMPa\t|\n", l.Sx)
+	fmt.Fprintf(w, "|\tSy:\t%8.3f\tMPa\t|\n", l.Sy)
+	fmt.Fprintf(w, "|\tTau:\t%8.3f\tMPa\t|\n", l.Tau)
+	fmt.Fprintf(w, "|\tLateral pressure:\t%8.3f\tMPa\t|\n", l.Pressure)
 	w.Flush()
 	return buf.String()
 }
@@ -76,9 +78,22 @@ func (l Load) String() string {
 type Config struct {
 	// 	FET FiniteElementType
 	// 	FES ModelSplitter
+	Elasticity float64 // MPa
+	Ratio      float64 // dimensionless
+}
+
+func DefaultConfig() (def *Config) {
+	def = &Config{
+		Elasticity: 205000, // MPa
+		Ratio:      0.3,
+	}
+	return
 }
 
 func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
+	if c == nil {
+		c = DefaultConfig()
+	}
 	// TODO : check input data
 
 	var m ortho.Model
@@ -111,10 +126,9 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 	}
 
 	builder := strings.Builder{}
-	add := func(format string, a ...interface{}){
+	add := func(format string, a ...interface{}) {
 		builder.WriteString(fmt.Sprintf(format, a...))
 	}
-
 
 	add("*NODE, NSET=NALL\n")
 	for i := range ps {
@@ -173,7 +187,7 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 
 	add("*MATERIAL, NAME=STEEL\n")
 	add("*ELASTIC\n")
-	add("205000,0.3\n")
+	add("%12.2f,%12.2f\n", c.Elasticity, c.Ratio)
 
 	for _, t := range thks {
 		add("*SHELL SECTION,ELSET=%s, MATERIAL=STEEL\n", t.name)
@@ -187,61 +201,62 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 
 	// Load on left/right edge
 	for _, s := range []struct {
-		pts          []ortho.PointType
-		byX, sortByX bool
-		factor       float64
+		pts     []ortho.PointType
+		loadByX bool
+		factor  float64
 	}{
 		// Sx
 		{
-			pts:     []ortho.PointType{ortho.Left, ortho.LeftBottom, ortho.LeftTop},
-			byX:     true,
-			sortByX: false,
+			pts: []ortho.PointType{
+				ortho.Left, ortho.LeftBottom, ortho.LeftTop},
+			loadByX: true,
 			factor:  +l.Sx,
 		},
 		{
-			pts:     []ortho.PointType{ortho.Right, ortho.RightBottom, ortho.RightTop},
-			byX:     true,
-			sortByX: false,
+			pts: []ortho.PointType{
+				ortho.Right, ortho.RightBottom, ortho.RightTop},
+			loadByX: true,
 			factor:  -l.Sx,
 		},
 		// Sy
 		{
-			pts:     []ortho.PointType{ortho.Top, ortho.LeftTop, ortho.RightTop},
-			byX:     false,
-			sortByX: true,
+			pts: []ortho.PointType{
+				ortho.Top, ortho.LeftTop, ortho.RightTop},
+			loadByX: false,
 			factor:  +l.Sy,
 		},
 		{
-			pts:     []ortho.PointType{ortho.Bottom, ortho.RightBottom, ortho.LeftBottom},
-			byX:     false,
-			sortByX: true,
+			pts: []ortho.PointType{
+				ortho.Bottom, ortho.RightBottom, ortho.LeftBottom},
+			loadByX: false,
 			factor:  -l.Sy,
 		},
 		// Tau
 		{
-			pts:     []ortho.PointType{ortho.Left, ortho.LeftBottom, ortho.LeftTop},
-			byX:     false,
-			sortByX: false,
-			factor:  +l.Tau,
-		},
-		{
-			pts:     []ortho.PointType{ortho.Right, ortho.RightBottom, ortho.RightTop},
-			byX:     false,
-			sortByX: false,
+			pts: []ortho.PointType{
+				ortho.Left, ortho.LeftBottom, ortho.LeftTop},
+			loadByX: false,
 			factor:  -l.Tau,
 		},
 		{
-			pts:     []ortho.PointType{ortho.Top, ortho.LeftTop, ortho.RightTop},
-			byX:     true,
-			sortByX: true,
+			pts: []ortho.PointType{
+				ortho.Right, ortho.RightBottom, ortho.RightTop},
+			loadByX: false,
 			factor:  +l.Tau,
 		},
 		{
-			pts:     []ortho.PointType{ortho.Bottom, ortho.RightBottom, ortho.LeftBottom},
-			byX:     true,
-			sortByX: true,
+			pts: []ortho.PointType{
+				ortho.Top, ortho.LeftTop, ortho.RightTop},
+			loadByX: true,
+			factor:  +l.Tau,
+		},
+		{
+			pts: []ortho.PointType{
+				ortho.Bottom, ortho.RightBottom, ortho.LeftBottom},
+			loadByX: true,
 			factor:  -l.Tau,
 		},
+		// TODO Lateral pressure
 	} {
 		if math.Abs(s.factor) == 0.0 {
 			continue
@@ -255,34 +270,51 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 				}
 			}
 		}
+		var dx, dy uint64
+		{
+			xmin, xmax := ps[ind[0]][0], ps[ind[0]][0]
+			ymin, ymax := ps[ind[0]][1], ps[ind[0]][1]
+			for _, index := range ind {
+				if v := ps[index][0]; v < xmin {
+					xmin = v
+				}
+				if v := ps[index][0]; xmax < v {
+					xmax = v
+				}
+				if v := ps[index][1]; v < ymin {
+					ymin = v
+				}
+				if v := ps[index][1]; ymax < v {
+					ymax = v
+				}
+			}
+			dx = xmax - xmin
+			dy = ymax - ymin
+		}
+		if (dx == 0 && dy == 0) || (dx != 0 && dy != 0) {
+			panic(fmt.Errorf("dx=%d,dy=%d", dx, dy))
+		}
 		// sorting
+		var sd int // direction of sorting
+		if dx < dy {
+			sd = 1
+		}
 		sort.SliceStable(ind, func(i, j int) bool {
 			i = ind[i]
 			j = ind[j]
-			if s.sortByX {
-				return ps[i][0] < ps[j][0]
-			}
-			return ps[i][1] < ps[j][1]
+			return ps[i][sd] < ps[j][sd]
 		})
 		// load distribution
 		for i := range ind {
 			var L float64
 			if i != 0 {
-				if s.byX {
-					L += float64(ps[ind[i]][1]-ps[ind[i-1]][1]) / 2.0
-				} else {
-					L += float64(ps[ind[i]][0]-ps[ind[i-1]][0]) / 2.0
-				}
+				L += float64(ps[ind[i]][sd]-ps[ind[i-1]][sd]) / 2.0
 			}
 			if i != len(ind)-1 {
-				if s.byX {
-					L += float64(ps[ind[i+1]][1]-ps[ind[i]][1]) / 2.0
-				} else {
-					L += float64(ps[ind[i+1]][0]-ps[ind[i]][0]) / 2.0
-				}
+				L += float64(ps[ind[i+1]][sd]-ps[ind[i]][sd]) / 2.0
 			}
 			force := L * float64(thks[0].thk) * s.factor
-			if s.byX {
+			if s.loadByX {
 				add("%5d,%5d, %+9.5e\n", ind[i]+1, 1, force)
 			} else {
 				add("%5d,%5d, %+9.5e\n", ind[i]+1, 2, force)
