@@ -1,6 +1,7 @@
-package main
+package eplate
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/Konstantin8105/ortho"
 )
@@ -19,14 +21,55 @@ type Design struct {
 	Stiffiners []Stiffiner
 }
 
+func (d Design) String() string {
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', tabwriter.TabIndent)
+	fmt.Fprintf(w, "Base plate dimensions:\n")
+	fmt.Fprintf(w, "|\tHeigth:\t%5d\tmm\t|\n", d.H)
+	fmt.Fprintf(w, "|\tWidth:\t%5d\tmm\t|\n", d.W)
+	fmt.Fprintf(w, "|\tThickness:\t%5d\tmm\t|\n", d.Thk)
+	// Stiffiners
+	if 0 < len(d.Stiffiners) {
+		for i, st := range d.Stiffiners {
+			fmt.Fprintf(w, "%s\n", st)
+			fmt.Fprintf(w, "Stiffiner position: %d\n", i+1)
+		}
+	}
+	w.Flush()
+	return buf.String()
+}
+
 type Stiffiner struct {
 	W, Thk       uint64 // mm
 	Offset       uint64 // distance from zero point
 	IsHorizontal bool
 }
 
+func (s Stiffiner) String() string {
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', tabwriter.TabIndent)
+	fmt.Fprintf(w, "Stiffiner dimensions:\n")
+	fmt.Fprintf(w, "|\tWidth:\t%5d\tmm\t|\n", s.W)
+	fmt.Fprintf(w, "|\tThickness:\t%5d\tmm\t|\n", s.Thk)
+	fmt.Fprintf(w, "|\tOffset from plane:\t%5d\tmm\t|\n", s.Offset)
+	fmt.Fprintf(w, "|\tHorizontal:\t%v\t\t|\n", s.IsHorizontal)
+	w.Flush()
+	return buf.String()
+}
+
 type Load struct {
 	Sx, Sy, Tau float64 // MPa
+}
+
+func (l Load) String() string {
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', tabwriter.TabIndent)
+	fmt.Fprintf(w, "Loads:\n")
+	fmt.Fprintf(w, "|\tSx:\t%5.3f\tMPa\t|\n", l.Sx)
+	fmt.Fprintf(w, "|\tSy:\t%5.3f\tMPa\t|\n", l.Sy)
+	fmt.Fprintf(w, "|\tTau:\t%5.3f\tMPa\t|\n", l.Tau)
+	w.Flush()
+	return buf.String()
 }
 
 type Config struct {
@@ -34,7 +77,7 @@ type Config struct {
 	// 	FES ModelSplitter
 }
 
-func Calculate(d Design, l Load, c *Config) {
+func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 	// TODO : check input data
 
 	var m ortho.Model
@@ -256,10 +299,7 @@ func Calculate(d Design, l Load, c *Config) {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	//fmt.Println(output)
-
-	parse(output)
+	return parse(output)
 }
 
 func ccx(content string) (output string, err error) {
@@ -289,7 +329,7 @@ func ccx(content string) (output string, err error) {
 	return string(dat), nil
 }
 
-func parse(content string) {
+func parse(content string) (buckle, Smax, Dmax float64) {
 	content = strings.ReplaceAll(content, "\r", "")
 	lines := strings.Split(content, "\n")
 
@@ -301,7 +341,7 @@ func parse(content string) {
 	//       1   0.2680174E+03
 	//       2   0.3149906E+03
 	//
-	var buckle []float64
+	buckle = 1e10
 	for i := range lines {
 		if !strings.Contains(lines[i], "B U C K L I N G   F A C T O R   O U T P U T") {
 			continue
@@ -320,11 +360,11 @@ func parse(content string) {
 				panic(fields[1])
 			}
 			factor = math.Abs(factor)
-			buckle = append(buckle, factor)
+			if factor < buckle {
+				buckle = factor
+			}
 		}
 	}
-	sort.Float64s(buckle) // sorting
-	fmt.Println("Buckling factors: ", buckle[0])
 
 	//  stresses (elem, integ.pnt.,sxx,syy,szz,sxy,sxz,syz) for set BASE and time  0.0000000E+00
 	//
@@ -382,7 +422,6 @@ func parse(content string) {
 		}
 	}
 	// calculate maximal stresses
-	var Smax float64
 	for i := range stresses {
 		var s float64
 		for _, v := range stresses[i].value {
@@ -391,7 +430,6 @@ func parse(content string) {
 		s = math.Sqrt(s)
 		Smax = math.Max(Smax, s)
 	}
-	fmt.Println("Smax = ", Smax, "MPA")
 
 	//  displacements (vx,vy,vz) for set NALL and time  0.0000000E+00
 	//
@@ -437,7 +475,6 @@ func parse(content string) {
 		}
 	}
 	// calculate maximal displacement
-	var Dmax float64
 	for i := range disps {
 		var s float64
 		for _, v := range disps[i].value {
@@ -446,70 +483,6 @@ func parse(content string) {
 		s = math.Sqrt(s)
 		Dmax = math.Max(Dmax, s)
 	}
-	fmt.Println("Dmax = ", Dmax, "mm")
-}
 
-func main() {
-	fs := []float64{6.0 / 9.0} // 0.2, 0.4, 0.6, 0.7, 0.8, 0.9}
-	for _, f := range fs {
-		d := Design{
-			W:   1800,
-			H:   1800,
-			Thk: 12,
-			Stiffiners: []Stiffiner{
-				Stiffiner{
-					W:            100,
-					Thk:          10,
-					Offset:       uint64(f * 900.0), // 600,
-					IsHorizontal: true,
-				},
-				Stiffiner{
-					W:            100,
-					Thk:          10,
-					Offset:       1800 - uint64(f*900.0), //1200,
-					IsHorizontal: true,
-				},
-			},
-		}
-		l := Load{
-			Sx:  1.0,
-			Sy:  0.0,
-			Tau: 0.0,
-		}
-
-		fmt.Printf("f = %v\n", f)
-		fmt.Printf("d = %v\n", d)
-		fmt.Printf("l = %v\n", l)
-		Calculate(d, l, nil)
-	}
-	{
-		d := Design{
-			W:   1800,
-			H:   1800,
-			Thk: 12,
-			Stiffiners: []Stiffiner{
-				Stiffiner{
-					W:            100,
-					Thk:          10,
-					Offset:       600,
-					IsHorizontal: false,
-				},
-				Stiffiner{
-					W:            100,
-					Thk:          10,
-					Offset:       1200,
-					IsHorizontal: false,
-				},
-			},
-		}
-		l := Load{
-			Sx:  0.0,
-			Sy:  1.0,
-			Tau: 0.0,
-		}
-		fmt.Printf("d = %v\n", d)
-		fmt.Printf("l = %v\n", l)
-		Calculate(d, l, nil)
-	}
 	return
 }
