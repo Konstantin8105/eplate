@@ -147,13 +147,26 @@ func Calculate(d Design, l Load, c *Config) {
 			pts:     []ortho.PointType{ortho.Left, ortho.LeftBottom, ortho.LeftTop},
 			byX:     true,
 			sortByX: false,
-			factor:  l.Sx,
+			factor:  +l.Sx,
 		},
 		{
 			pts:     []ortho.PointType{ortho.Right, ortho.RightBottom, ortho.RightTop},
 			byX:     true,
 			sortByX: false,
 			factor:  -l.Sx,
+		},
+
+		{
+			pts:     []ortho.PointType{ortho.Top, ortho.LeftTop, ortho.RightTop},
+			byX:     false,
+			sortByX: true,
+			factor:  +l.Sy,
+		},
+		{
+			pts:     []ortho.PointType{ortho.Bottom, ortho.RightBottom, ortho.LeftBottom},
+			byX:     false,
+			sortByX: true,
+			factor:  -l.Sy,
 		},
 	} {
 		if math.Abs(s.factor) == 0.0 {
@@ -280,6 +293,7 @@ func parse(content string) {
 			if err != nil {
 				panic(fields[1])
 			}
+			factor = math.Abs(factor)
 			buckle = append(buckle, factor)
 		}
 	}
@@ -410,32 +424,63 @@ func parse(content string) {
 }
 
 func main() {
-	d := Design{
-		W:   1800,
-		H:   1800,
-		Thk: 12,
-		Stiffiners: []Stiffiner{
-			Stiffiner{
-				W:            100,
-				Thk:          10,
-				Offset:       600,
-				IsHorizontal: true,
+	{
+		d := Design{
+			W:   1800,
+			H:   1800,
+			Thk: 12,
+			Stiffiners: []Stiffiner{
+				Stiffiner{
+					W:            100,
+					Thk:          10,
+					Offset:       600,
+					IsHorizontal: true,
+				},
+				Stiffiner{
+					W:            100,
+					Thk:          10,
+					Offset:       1200,
+					IsHorizontal: true,
+				},
 			},
-			Stiffiner{
-				W:            100,
-				Thk:          10,
-				Offset:       1200,
-				IsHorizontal: true,
+		}
+		l := Load{
+			Sx:  1.0,
+			Sy:  0.0,
+			Tau: 0.0,
+		}
+		fmt.Printf("d = %v\n", d)
+		fmt.Printf("l = %v\n", l)
+		Calculate(d, l, nil)
+	}
+	{
+		d := Design{
+			W:   1800,
+			H:   1800,
+			Thk: 12,
+			Stiffiners: []Stiffiner{
+				Stiffiner{
+					W:            100,
+					Thk:          10,
+					Offset:       600,
+					IsHorizontal: false,
+				},
+				Stiffiner{
+					W:            100,
+					Thk:          10,
+					Offset:       1200,
+					IsHorizontal: false,
+				},
 			},
-		},
+		}
+		l := Load{
+			Sx:  0.0,
+			Sy:  1.0,
+			Tau: 0.0,
+		}
+		fmt.Printf("d = %v\n", d)
+		fmt.Printf("l = %v\n", l)
+		Calculate(d, l, nil)
 	}
-	l := Load{
-		Sx:  1.0,
-		Sy:  0.0,
-		Tau: 0.0,
-	}
-	fmt.Printf("d = %v\n", d)
-	fmt.Printf("l = %v\n", l)
-	Calculate(d, l, nil)
 	return
 }
