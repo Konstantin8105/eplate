@@ -32,8 +32,10 @@ func Example() {
 		Sy:  0.0,
 		Tau: 0.0,
 	}
+	c := DefaultConfig()
+	c.MaxDistance = 100
 	fmt.Fprintf(os.Stdout, "%s\n%s\n", d, l)
-	buckle, Smax, Dmax := Calculate(d, l, nil)
+	buckle, Smax, Dmax := Calculate(d, l, c)
 
 	var buf bytes.Buffer
 	w := tabwriter.NewWriter(&buf, 0, 0, 1, ' ', tabwriter.TabIndent)

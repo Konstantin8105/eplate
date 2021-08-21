@@ -76,19 +76,27 @@ func (l Load) String() string {
 }
 
 type Config struct {
-	// 	FET FiniteElementType
-	// 	FES ModelSplitter
-	Elasticity float64 // MPa
-	Ratio      float64 // dimensionless
+	FET         FiniteElementType
+	MaxDistance uint64
+	Elasticity  float64 // MPa
+	Ratio       float64 // dimensionless
 }
 
 func DefaultConfig() (def *Config) {
 	def = &Config{
-		Elasticity: 205000, // MPa
-		Ratio:      0.3,
+		FET:         S4,
+		MaxDistance: 0,
+		Elasticity:  205000, // MPa
+		Ratio:       0.3,
 	}
 	return
 }
+
+type FiniteElementType string
+
+const (
+	S4 FiniteElementType = "S4"
+)
 
 func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 	if c == nil {
@@ -110,7 +118,7 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 			d.Stiffiners[i].IsHorizontal,
 		)
 	}
-	ps, rs := m.Generate(100)
+	ps, rs := m.Generate(c.MaxDistance)
 	ts := ortho.Select(ps)
 
 	type elset struct {
@@ -137,9 +145,8 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 		add("%5d,%5d,%5d,%5d\n", i+1, x, y, z)
 	}
 
-	// TODO : S4 or S4R
 	for _, t := range thks {
-		add("*ELEMENT, TYPE=S4, ELSET=%s\n", t.name)
+		add("*ELEMENT, TYPE=%s, ELSET=%s\n", string(c.FET), t.name)
 		for i := range rs {
 			if t.name != rs[i].Material {
 				continue
