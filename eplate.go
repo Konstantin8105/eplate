@@ -28,11 +28,12 @@ func (d Design) String() string {
 	fmt.Fprintf(w, "|\tHeigth:\t%5d\tmm\t|\n", d.H)
 	fmt.Fprintf(w, "|\tWidth:\t%5d\tmm\t|\n", d.W)
 	fmt.Fprintf(w, "|\tThickness:\t%5d\tmm\t|\n", d.Thk)
+	fmt.Fprintf(w, "\n")
 	// Stiffiners
 	if 0 < len(d.Stiffiners) {
 		for i, st := range d.Stiffiners {
-			fmt.Fprintf(w, "%s\n", st)
 			fmt.Fprintf(w, "Stiffiner position: %d\n", i+1)
+			fmt.Fprintf(w, "%s", st)
 		}
 	}
 	w.Flush()
@@ -109,31 +110,35 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 		})
 	}
 
-	var out string
+	builder := strings.Builder{}
+	add := func(format string, a ...interface{}){
+		builder.WriteString(fmt.Sprintf(format, a...))
+	}
 
-	out += fmt.Sprintf("*NODE, NSET=NALL\n")
+
+	add("*NODE, NSET=NALL\n")
 	for i := range ps {
 		x, y, z := ps[i][0], ps[i][1], ps[i][2]
 		// TODO imperfection:
-		out += fmt.Sprintf("%5d,%5d,%5d,%5d\n", i+1, x, y, z)
+		add("%5d,%5d,%5d,%5d\n", i+1, x, y, z)
 	}
 
 	// TODO : S4 or S4R
 	for _, t := range thks {
-		out += fmt.Sprintf("*ELEMENT, TYPE=S4, ELSET=%s\n", t.name)
+		add("*ELEMENT, TYPE=S4, ELSET=%s\n", t.name)
 		for i := range rs {
 			if t.name != rs[i].Material {
 				continue
 			}
-			out += fmt.Sprintf("%5d", i+1)
+			add("%5d", i+1)
 			for _, p := range rs[i].PointsId {
-				out += fmt.Sprintf(",%5d", p+1)
+				add(",%5d", p+1)
 			}
-			out += fmt.Sprintf("\n")
+			add("\n")
 		}
 	}
 
-	out += fmt.Sprintf("*BOUNDARY\n")
+	add("*BOUNDARY\n")
 	boundary := make([][6]bool, len(ps))
 	for i := range ts {
 		if ts[i] == ortho.Other || ts[i] == ortho.MainPlate {
@@ -161,24 +166,24 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 	for i := range boundary {
 		for p := 0; p < 6; p++ {
 			if boundary[i][p] == true {
-				out += fmt.Sprintf("%5d,%5d,%5d\n", i+1, p+1, p+1)
+				add("%5d,%5d,%5d\n", i+1, p+1, p+1)
 			}
 		}
 	}
 
-	out += fmt.Sprintf("*MATERIAL, NAME=STEEL\n")
-	out += fmt.Sprintf("*ELASTIC\n")
-	out += fmt.Sprintf("205000,0.3\n")
+	add("*MATERIAL, NAME=STEEL\n")
+	add("*ELASTIC\n")
+	add("205000,0.3\n")
 
 	for _, t := range thks {
-		out += fmt.Sprintf("*SHELL SECTION,ELSET=%s, MATERIAL=STEEL\n", t.name)
-		out += fmt.Sprintf("%5d\n", t.thk)
+		add("*SHELL SECTION,ELSET=%s, MATERIAL=STEEL\n", t.name)
+		add("%5d\n", t.thk)
 	}
 
-	out += fmt.Sprintf("*STEP\n")
-	out += fmt.Sprintf("*BUCKLE\n2\n") // 2 buckling modes
+	add("*STEP\n")
+	add("*BUCKLE\n2\n") // 2 buckling modes
 
-	out += fmt.Sprintf("*CLOAD\n")
+	add("*CLOAD\n")
 
 	// Load on left/right edge
 	for _, s := range []struct {
@@ -278,24 +283,24 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 			}
 			force := L * float64(thks[0].thk) * s.factor
 			if s.byX {
-				out += fmt.Sprintf("%5d,%5d, %+9.5e\n", ind[i]+1, 1, force)
+				add("%5d,%5d, %+9.5e\n", ind[i]+1, 1, force)
 			} else {
-				out += fmt.Sprintf("%5d,%5d, %+9.5e\n", ind[i]+1, 2, force)
+				add("%5d,%5d, %+9.5e\n", ind[i]+1, 2, force)
 			}
 		}
 	}
 
 	// print stresses
 	for _, t := range thks {
-		out += fmt.Sprintf("*EL FILE  , ELSET=%s\nS\n", t.name)
-		out += fmt.Sprintf("*EL PRINT , ELSET=%s\nS\n", t.name)
+		add("*EL FILE  , ELSET=%s\nS\n", t.name)
+		add("*EL PRINT , ELSET=%s\nS\n", t.name)
 	}
 	// print displacement
-	out += fmt.Sprintf("*NODE FILE  , NSET=NALL\nU\n")
-	out += fmt.Sprintf("*NODE PRINT , NSET=NALL\nU\n")
-	out += fmt.Sprintf("*END STEP\n")
+	add("*NODE FILE  , NSET=NALL\nU\n")
+	add("*NODE PRINT , NSET=NALL\nU\n")
+	add("*END STEP\n")
 
-	output, err := ccx(out)
+	output, err := ccx(builder.String())
 	if err != nil {
 		fmt.Println(err)
 	}
