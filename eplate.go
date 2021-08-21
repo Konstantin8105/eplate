@@ -143,6 +143,7 @@ func Calculate(d Design, l Load, c *Config) {
 		byX, sortByX bool
 		factor       float64
 	}{
+		// Sx
 		{
 			pts:     []ortho.PointType{ortho.Left, ortho.LeftBottom, ortho.LeftTop},
 			byX:     true,
@@ -155,7 +156,7 @@ func Calculate(d Design, l Load, c *Config) {
 			sortByX: false,
 			factor:  -l.Sx,
 		},
-
+		// Sy
 		{
 			pts:     []ortho.PointType{ortho.Top, ortho.LeftTop, ortho.RightTop},
 			byX:     false,
@@ -167,6 +168,31 @@ func Calculate(d Design, l Load, c *Config) {
 			byX:     false,
 			sortByX: true,
 			factor:  -l.Sy,
+		},
+		// Tau
+		{
+			pts:     []ortho.PointType{ortho.Left, ortho.LeftBottom, ortho.LeftTop},
+			byX:     false,
+			sortByX: false,
+			factor:  +l.Tau,
+		},
+		{
+			pts:     []ortho.PointType{ortho.Right, ortho.RightBottom, ortho.RightTop},
+			byX:     false,
+			sortByX: false,
+			factor:  -l.Tau,
+		},
+		{
+			pts:     []ortho.PointType{ortho.Top, ortho.LeftTop, ortho.RightTop},
+			byX:     true,
+			sortByX: true,
+			factor:  +l.Tau,
+		},
+		{
+			pts:     []ortho.PointType{ortho.Bottom, ortho.RightBottom, ortho.LeftBottom},
+			byX:     true,
+			sortByX: true,
+			factor:  -l.Tau,
 		},
 	} {
 		if math.Abs(s.factor) == 0.0 {
@@ -424,7 +450,8 @@ func parse(content string) {
 }
 
 func main() {
-	{
+	fs := []float64{6.0 / 9.0} // 0.2, 0.4, 0.6, 0.7, 0.8, 0.9}
+	for _, f := range fs {
 		d := Design{
 			W:   1800,
 			H:   1800,
@@ -433,13 +460,13 @@ func main() {
 				Stiffiner{
 					W:            100,
 					Thk:          10,
-					Offset:       600,
+					Offset:       uint64(f * 900.0), // 600,
 					IsHorizontal: true,
 				},
 				Stiffiner{
 					W:            100,
 					Thk:          10,
-					Offset:       1200,
+					Offset:       1800 - uint64(f*900.0), //1200,
 					IsHorizontal: true,
 				},
 			},
@@ -449,6 +476,8 @@ func main() {
 			Sy:  0.0,
 			Tau: 0.0,
 		}
+
+		fmt.Printf("f = %v\n", f)
 		fmt.Printf("d = %v\n", d)
 		fmt.Printf("l = %v\n", l)
 		Calculate(d, l, nil)
