@@ -14,60 +14,56 @@ import (
 	"github.com/Konstantin8105/ortho"
 )
 
-// *NODE, nset=nall
-// 1,0,0,0
-// 2,200,0,0
-// 3,200,50,0
-// 4,0,50,0
-// 5,400,0
-// 6,400,50
-// *ELEMENT, type=S4R, elset=eall
-// 1,1,2,3,4
-// 2,2,5,6,3
-// *BOUNDARY
-// 1,1,6
-// 4,1,6
-// *MATERIAL, name=Steel
-// *ELASTIC
-// 210000,0.3
-// *SHELL SECTION,ELSET=eall, material=steel
-// 5
-// *STEP
-// *BUCKLE
-// 2
-// *CLOAD
-// 6,3,-10000
-// *EL PRINT,elset=eall
-// s
-// *NODE FILE
-// u
-// *EL FILE, output=3D
-// s
-// *END STEP
+type Design struct {
+	W, H, Thk  uint64 // mm
+	Stiffiners []Stiffiner
+}
 
-func main() {
-	Sx := 1.0 // N/mm2
+type Stiffiner struct {
+	W, Thk       uint64 // mm
+	Offset       uint64 // distance from zero point
+	IsHorizontal bool
+}
+
+type Load struct {
+	Sx, Sy, Tau float64 // MPa
+}
+
+type Config struct {
+	// 	FET FiniteElementType
+	// 	FES ModelSplitter
+}
+
+func Calculate(d Design, l Load, c *Config) {
+	// TODO : check input data
+
 	var m ortho.Model
-	m.Init(1800, 1800, "BASE")
- 	m.Add(100, "STIFF1", 600, true)
- 	m.Add(100, "STIFF2", 1200, true)
- // m.Add(100, "STIFF3", 600, false)
- // m.Add(100, "STIFF4", 1200, false)
+	name := func(i int) string {
+		return fmt.Sprintf("STIFF%d", i)
+	}
+	basename := "BASE"
+	m.Init(d.W, d.H, basename)
+	for i := range d.Stiffiners {
+		m.Add(
+			d.Stiffiners[i].W,
+			name(i),
+			d.Stiffiners[i].Offset,
+			d.Stiffiners[i].IsHorizontal,
+		)
+	}
 	ps, rs := m.Generate(100)
 	ts := ortho.Select(ps)
 
-	thks := []struct {
-		name  string
-		value uint64
-	}{
-		// upper case
-		// uniq names
-		// no space
-		{"BASE", 12},
-		{"STIFF1", 10},
-		{"STIFF2", 10},
-	// {"STIFF3", 10},
-	// {"STIFF4", 10},
+	type elset struct {
+		name string
+		thk  uint64
+	}
+	var thks = []elset{elset{name: basename, thk: d.Thk}}
+	for i := range d.Stiffiners {
+		thks = append(thks, elset{
+			name: name(i),
+			thk:  d.Stiffiners[i].Thk,
+		})
 	}
 
 	var out string
@@ -76,9 +72,6 @@ func main() {
 	for i := range ps {
 		x, y, z := ps[i][0], ps[i][1], ps[i][2]
 		// TODO imperfection:
-		// if z == 100 {
-		// 	y += uint64(float64(x)/1800.0*20)
-		// }
 		out += fmt.Sprintf("%5d,%5d,%5d,%5d\n", i+1, x, y, z)
 	}
 
@@ -136,7 +129,7 @@ func main() {
 
 	for _, t := range thks {
 		out += fmt.Sprintf("*SHELL SECTION,ELSET=%s, MATERIAL=STEEL\n", t.name)
-		out += fmt.Sprintf("%5d\n", t.value)
+		out += fmt.Sprintf("%5d\n", t.thk)
 	}
 
 	out += fmt.Sprintf("*STEP\n")
@@ -154,13 +147,13 @@ func main() {
 			pts:     []ortho.PointType{ortho.Left, ortho.LeftBottom, ortho.LeftTop},
 			byX:     true,
 			sortByX: false,
-			factor:  Sx,
+			factor:  l.Sx,
 		},
 		{
 			pts:     []ortho.PointType{ortho.Right, ortho.RightBottom, ortho.RightTop},
 			byX:     true,
 			sortByX: false,
-			factor:  -Sx,
+			factor:  -l.Sx,
 		},
 	} {
 		if math.Abs(s.factor) == 0.0 {
@@ -201,7 +194,7 @@ func main() {
 					L += float64(ps[ind[i+1]][0]-ps[ind[i]][0]) / 2.0
 				}
 			}
-			force := L * float64(thks[0].value) * s.factor
+			force := L * float64(thks[0].thk) * s.factor
 			if s.byX {
 				out += fmt.Sprintf("%5d,%5d, %+9.5e\n", ind[i]+1, 1, force)
 			} else {
@@ -414,4 +407,35 @@ func parse(content string) {
 		Dmax = math.Max(Dmax, s)
 	}
 	fmt.Println("Dmax = ", Dmax, "mm")
+}
+
+func main() {
+	d := Design{
+		W:   1800,
+		H:   1800,
+		Thk: 12,
+		Stiffiners: []Stiffiner{
+			Stiffiner{
+				W:            100,
+				Thk:          10,
+				Offset:       600,
+				IsHorizontal: true,
+			},
+			Stiffiner{
+				W:            100,
+				Thk:          10,
+				Offset:       1200,
+				IsHorizontal: true,
+			},
+		},
+	}
+	l := Load{
+		Sx:  1.0,
+		Sy:  0.0,
+		Tau: 0.0,
+	}
+	fmt.Printf("d = %v\n", d)
+	fmt.Printf("l = %v\n", l)
+	Calculate(d, l, nil)
+	return
 }
