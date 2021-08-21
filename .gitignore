@@ -4,3 +4,6 @@
 *.inp
 *.sta
 spooles.out
+
+*.out
+*.test
