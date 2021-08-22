@@ -140,8 +140,35 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 
 	add("*NODE, NSET=NALL\n")
 	for i := range ps {
-		x, y, z := ps[i][0], ps[i][1], ps[i][2]
+		// by Table C.1 EN1993-1-5
+		// Assumptions for FE-methods:
+		//	No	Material	Geom.behavior	Imperfection
+		//	1	linear		linear			none
+		//	2	nonlinear	linear			none
+		//	3	linear		nonlinear		none
+		//	4	linear		nonlinear		yes
+		//	5	nonlinear	nonlinear		yes
 		// TODO imperfection:
+		//	IMP1	+/-		the 1st buckling mode with amplitude:
+		//					w=min(a/400,b/400)
+		//	IMP2	+/- 	the 2nd buckling mode with amplitude:
+		//					w=min(a/200,b1/200)
+		//	IMP3	+/-		global panel imperfection with amplitude:
+		//					w=min(a/400,b/400)*sin(pi*x/b)*sin(pi*y/a)
+		//	IMP4	+/-		global panel imperfection with amplitude:
+		//					w=min(a/400,b1/400)*sin(pi*x/b1)*sin(pi*y/a)
+		//	IMP6	+/-		combined imperfection of global plate and
+		//					loal sub-panel imperfection.
+		//					IMP6(+/-) = IMP3(+/-) + 0.7*IMP4(+)
+		//	IMPT	+/-		twist?
+		//
+		// example:
+		//
+		// w:=math.Min(1800.0/400.0,1800.0/400.0)
+		// z += w*math.Sin(math.Pi*x/1800.0)*math.Sin(math.Pi*y/1800.0)
+		// x, y, z := float64(ps[i][0]), float64(ps[i][1]), float64(ps[i][2])
+		// add("%5d,%12.5f,%12.5f,%12.5f\n", i+1, x, y, z)
+		x, y, z := ps[i][0], ps[i][1], ps[i][2]
 		add("%5d,%5d,%5d,%5d\n", i+1, x, y, z)
 	}
 
@@ -263,7 +290,6 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 			loadByX: true,
 			factor:  -l.Tau,
 		},
-		// TODO Lateral pressure
 	} {
 		if math.Abs(s.factor) == 0.0 {
 			continue
@@ -326,6 +352,66 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 			} else {
 				add("%5d,%5d, %+9.5e\n", ind[i]+1, 2, force)
 			}
+		}
+	}
+	// Lateral pressure loads
+	if l.Pressure != 0 {
+		//	0 is X direction
+		//	1 is Y direction
+		var lists [2][]uint64
+		for d := 0; d < 2; d++ {
+			for i := range ts {
+				if ts[i] == ortho.Other {
+					continue
+				}
+				lists[d] = append(lists[d], ps[i][d])
+			}
+			sort.SliceStable(lists[d], func(i, j int) bool { // less
+				return lists[d][i] < lists[d][j]
+			})
+			step := 0
+			for i := range lists[d] {
+				if lists[d][i] != lists[d][i+1] {
+					step = i + 1
+					break
+				}
+			}
+			if len(lists[d]) == 0 {
+				panic("slice is zero size")
+			}
+			if len(lists[d])%step != 0 {
+				panic("fail step algorithm")
+			}
+			size := len(lists[d]) / step
+			for i := 1; i < size; i++ {
+				lists[d][i] = lists[d][i*step]
+			}
+			lists[d] = lists[d][:size]
+		}
+		for i := range ts {
+			if ts[i] == ortho.Other {
+				continue
+			}
+			var index [2]int
+			for d := 0; d < 2; d++ {
+				for k := range lists[d] {
+					if ps[i][d] == lists[d][k] {
+						index[d] = k
+						break
+					}
+				}
+			}
+			var L [2]float64
+			for d := 0; d < 2; d++ {
+				if index[d] != 0 {
+					L[d] += float64(lists[d][index[d]]-lists[d][index[d]-1]) / 2.0
+				}
+				if index[d] != len(lists[d])-1 {
+					L[d] += float64(lists[d][index[d]+1]-lists[d][index[d]]) / 2.0
+				}
+			}
+			force := L[0] * L[1] * float64(thks[0].thk) * l.Pressure
+			add("%5d,%5d, %+9.5e\n", i+1, 3, force) // Z force
 		}
 	}
 
