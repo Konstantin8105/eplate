@@ -96,6 +96,7 @@ type FiniteElementType string
 
 const (
 	S4 FiniteElementType = "S4"
+	// S8R                   = "S8R" // TODO: add 8-node rectangles
 )
 
 func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
@@ -417,8 +418,8 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 
 	// print stresses
 	for _, t := range thks {
-		add("*EL FILE  , ELSET=%s\nS\n", t.name)
-		add("*EL PRINT , ELSET=%s\nS\n", t.name)
+		add("*EL FILE  , ELSET=%s\nS,PEEQ\n", t.name)
+		add("*EL PRINT , ELSET=%s\nS,PEEQ\n", t.name)
 	}
 	// print displacement
 	add("*NODE FILE  , NSET=NALL\nU\n")
@@ -431,6 +432,86 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 	}
 	return parse(output)
 }
+
+// TODO : Nonlinear calculation
+//
+// *MATERIAL,NAME=steel
+// *ELASTIC
+// 2.9000E+07,0.28
+// *PLASTIC,HARDENING=isotropic
+// 36000,0.0
+// 63000,0.00620689655172414
+//
+// *DENSITY
+// 7.3500E-04
+// *EXPANSION
+// 7.2280E-06
+//
+// *SHELL SECTION,ELSET=Eall,COMPOSITE
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+// 5.2083E-03,,steel
+//
+// *TIME POINTS,NAME=T1,GENERATE
+// 0,1,2.0000E-02
+//
+// *STEP,NLGEOM,INC=100000
+// *STATIC
+// 0.01,1
+// *CLOAD
+// load,3,-1.4167E+03
+//
+// *NODE FILE ,TIME POINTS=T1
+// U,
+// *EL FILE,TIME POINTS=T1
+// S,PEEQ,
+// *NODE PRINT,NSET=fix,TIME POINTS=T1
+// RF
+// *NODE PRINT,NSET=load,TIME POINTS=T1
+// RF
+// *END STEP
+// -------------------------------------
+// Linear calculation
+//
+// *MATERIAL,NAME=steel
+// *ELASTIC
+// 2.9000E+07,0.28
+//
+// *DENSITY
+// 7.3500E-04
+// *EXPANSION
+// 7.2280E-06
+//
+// *SHELL SECTION,MATERIAL=steel,ELSET=Eall,,OFFSET=0.0000E+00
+// 6.2500E-02
+//
+// *BOUNDARY
+// fix,1,1,0
+// fix,2,2,0
+// fix,3,3,0
+//
+// *BOUNDARY
+// load,1,1,0
+// load,2,2,0
+//
+// *STEP
+// *BUCKLE
+// 5
+// *CLOAD
+// load,3,-3.3113E+00
+//
+// *NODE FILE
+// U
+// *END STEP
 
 func ccx(content string) (output string, err error) {
 	dir, err := ioutil.TempDir("", "ccx")
