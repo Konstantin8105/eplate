@@ -410,7 +410,7 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 					L[d] += float64(lists[d][index[d]+1]-lists[d][index[d]]) / 2.0
 				}
 			}
-			force := L[0] * L[1] * float64(thks[0].thk) * l.Pressure
+			force := L[0] * L[1] * l.Pressure
 			add("%5d,%5d, %+9.5e\n", i+1, 3, force) // Z force
 		}
 	}
