@@ -357,62 +357,22 @@ func Calculate(d Design, l Load, c *Config) (buckle, Smax, Dmax float64) {
 	}
 	// Lateral pressure loads
 	if l.Pressure != 0 {
-		//	0 is X direction
-		//	1 is Y direction
-		var lists [2][]uint64
-		for d := 0; d < 2; d++ {
-			for i := range ts {
-				if ts[i] == ortho.Other {
-					continue
-				}
-				lists[d] = append(lists[d], ps[i][d])
+		for i := range rs {
+			dx := float64(ps[rs[i].PointsId[2]][0] - ps[rs[i].PointsId[0]][0])
+			dy := float64(ps[rs[i].PointsId[2]][1] - ps[rs[i].PointsId[0]][1])
+			for p := 0; p < 4; p++ {
+				// Z force
+				force := 0.25 * dx * dy * l.Pressure
+				// factor 0.25 because only part for each point
+				//	+------|-----+
+				//	|      |     |
+				//	|      |     |
+				//	______________
+				//	|******|     |
+				//	|******|     |
+				//	+------|-----+
+				add("%5d,%5d, %+9.5e\n", rs[i].PointsId[p]+1, 3, force)
 			}
-			sort.SliceStable(lists[d], func(i, j int) bool { // less
-				return lists[d][i] < lists[d][j]
-			})
-			step := 0
-			for i := range lists[d] {
-				if lists[d][i] != lists[d][i+1] {
-					step = i + 1
-					break
-				}
-			}
-			if len(lists[d]) == 0 {
-				panic("slice is zero size")
-			}
-			if len(lists[d])%step != 0 {
-				panic("fail step algorithm")
-			}
-			size := len(lists[d]) / step
-			for i := 1; i < size; i++ {
-				lists[d][i] = lists[d][i*step]
-			}
-			lists[d] = lists[d][:size]
-		}
-		for i := range ts {
-			if ts[i] == ortho.Other {
-				continue
-			}
-			var index [2]int
-			for d := 0; d < 2; d++ {
-				for k := range lists[d] {
-					if ps[i][d] == lists[d][k] {
-						index[d] = k
-						break
-					}
-				}
-			}
-			var L [2]float64
-			for d := 0; d < 2; d++ {
-				if index[d] != 0 {
-					L[d] += float64(lists[d][index[d]]-lists[d][index[d]-1]) / 2.0
-				}
-				if index[d] != len(lists[d])-1 {
-					L[d] += float64(lists[d][index[d]+1]-lists[d][index[d]]) / 2.0
-				}
-			}
-			force := L[0] * L[1] * l.Pressure
-			add("%5d,%5d, %+9.5e\n", i+1, 3, force) // Z force
 		}
 	}
 
